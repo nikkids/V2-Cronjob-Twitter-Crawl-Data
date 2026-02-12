@@ -6,7 +6,6 @@ set -euo pipefail
 # -------------------------
 MAX_RUNTIME=60
 WINDOW_HOURS=6
-
 SEARCH='pemilu OR jokowi OR prabowo OR capres OR pilpres'
 
 # -------------------------
@@ -37,11 +36,6 @@ UNTIL_DATE="$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")"
 
 echo "Crawl day: since ${SINCE_DATE}, until ${UNTIL_DATE}"
 
-QUERY="${SEARCH} since:${SINCE_DATE} until:${UNTIL_DATE} lang:id"
-
-# -------------------------
-# Timer
-# -------------------------
 START_TS=$(date +%s)
 
 i=0
@@ -57,6 +51,7 @@ while true; do
   fi
 
   window_start=$(date -u -d "${SINCE_DATE} +${i} hours" +"%Y-%m-%dT%H:%M:%SZ")
+  window_end=$(date -u -d "${window_start} +${WINDOW_HOURS} hours" +"%Y-%m-%dT%H:%M:%SZ")
 
   if [[ "$(date -u -d "$window_start" +%s)" -ge \
         "$(date -u -d "${UNTIL_DATE}T00:00:00Z" +%s)" ]]; then
@@ -65,9 +60,12 @@ while true; do
 
   fname="${OUT_DIR}/tweets_${SINCE_DATE}_w${i}.csv"
 
-  echo "Fetching window ${window_start} -> ${UNTIL_DATE}"
+  QUERY="${SEARCH} since:${window_start} until:${window_end} lang:id"
 
-  npx -y tweet-harvest@2.6.1 \
+  echo "Fetching window ${window_start} -> ${window_end}"
+
+  # hard stop per crawl call so total runtime is respected
+  timeout 55s npx -y tweet-harvest@2.6.1 \
     -o "$fname" \
     -s "$QUERY" \
     --tab "LATEST" \
@@ -87,8 +85,8 @@ done
 FINAL="${DATA_DIR}/pemilu_${SINCE_DATE}.csv"
 
 if [ "${#out_files[@]}" -eq 0 ]; then
-  echo "No output files produced. Creating empty CSV."
-  > "$FINAL"
+  echo "No output files produced."
+  echo "id,created_at,text" > "$FINAL"
 else
   first=true
   > "$FINAL"
@@ -106,4 +104,8 @@ fi
 # -------------------------
 # Update cursor
 # -------------------------
-NEXT_DATE="$(date -u -d "${SINCE_DATE} +
+NEXT_DATE="$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")"
+echo "$NEXT_DATE" > "$CURSOR_FILE"
+
+echo "Saved $FINAL"
+echo "Next cursor: $NEXT_DATE"
