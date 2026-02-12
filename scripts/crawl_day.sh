@@ -4,13 +4,13 @@ set -euo pipefail
 # -------------------------
 # Config
 # -------------------------
-MAX_RUNTIME=60          # seconds (1 minute)
+MAX_RUNTIME=60          # seconds
 WINDOW_HOURS=6
 
 SEARCH='pemilu OR jokowi OR prabowo OR capres OR pilpres'
 
 # -------------------------
-# Safety checks
+# Safety
 # -------------------------
 if [ -z "${TWITTER_TOKEN:-}" ]; then
   echo "TWITTER_TOKEN is not set"
@@ -37,10 +37,8 @@ UNTIL_DATE="$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")"
 
 echo "Crawl day: since ${SINCE_DATE}, until ${UNTIL_DATE}"
 
-QUERY="${SEARCH} since:${SINCE_DATE} until:${UNTIL_DATE} lang:id"
-
 # -------------------------
-# Timer start
+# Start timer
 # -------------------------
 START_TS=$(date +%s)
 
@@ -48,37 +46,52 @@ i=0
 out_files=()
 
 while true; do
+
   now=$(date +%s)
   elapsed=$((now - START_TS))
 
   if [ "$elapsed" -ge "$MAX_RUNTIME" ]; then
-    echo "Time limit reached (${MAX_RUNTIME}s). Stopping crawl."
+    echo "Time limit reached. Stop loop."
     break
   fi
 
   window_start=$(date -u -d "${SINCE_DATE} +${i} hours" +"%Y-%m-%dT%H:%M:%SZ")
 
-  if [[ "$(date -u -d "$window_start" +%s)" -ge "$(date -u -d "${UNTIL_DATE}T00:00:00Z" +%s)" ]]; then
+  if [[ "$(date -u -d "$window_start" +%s)" -ge \
+        "$(date -u -d "${UNTIL_DATE}T00:00:00Z" +%s)" ]]; then
     break
   fi
 
-  fname="output/tweets_${SINCE_DATE}_w${i}.csv"
+  # remaining time for this run
+  now=$(date +%s)
+  remaining=$((MAX_RUNTIME - (now - START_TS)))
 
-  echo "Fetching window ${window_start} -> ${UNTIL_DATE}"
+  if [ "$remaining" -le 0 ]; then
+    echo "No remaining time. Stop."
+    break
+  fi
 
-  npx -y tweet-harvest@2.6.1 \
-    -o "${fname}" \
-    -s "${QUERY}" \
-    --tab "LATEST" \
-    -l 1000 \
-    --token "${TWITTER_TOKEN}" || true
+  fname="${OUT_DIR}/tweets_${SINCE_DATE}_w${i}.csv"
 
-  # only keep files that actually exist
+  query="${SEARCH} since:${SINCE_DATE} until:${UNTIL_DATE} lang:id"
+
+  echo "Fetching window ${window_start} (remaining ${remaining}s)"
+
+  # HARD time limit for tweet-harvest itself
+  timeout "${remaining}s" \
+    npx -y tweet-harvest@2.6.1 \
+      -o "${fname}" \
+      -s "${query}" \
+      --tab "LATEST" \
+      -l 1000 \
+      --token "${TWITTER_TOKEN}" || true
+
   if [[ -f "$fname" ]]; then
     out_files+=("$fname")
   fi
 
   i=$((i + WINDOW_HOURS))
+
 done
 
 # -------------------------
