@@ -8,7 +8,7 @@ fi
 
 START_LIMIT="2019-07-19"   # stop after 3 months
 
-CURSOR_FILE=".cursor_date"
+CURSOR_FILE="data/.cursor_date"
 OUT_DIR="data"
 
 mkdir -p "$OUT_DIR"
