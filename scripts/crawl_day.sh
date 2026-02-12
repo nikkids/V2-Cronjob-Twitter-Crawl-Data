@@ -58,7 +58,7 @@ while true; do
     break
   fi
 
-  fname="${OUT_DIR}/tweets_${SINCE_DATE}_w${i}.csv"
+  fname="output/tweets_${SINCE_DATE}_w${i}.csv"
 
   QUERY="${SEARCH} since:${window_start} until:${window_end} lang:id"
 
