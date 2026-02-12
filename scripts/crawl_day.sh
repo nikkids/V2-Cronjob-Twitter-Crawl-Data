@@ -36,7 +36,7 @@ while true; do
     break
   fi
 
-  fname="${OUT_DIR}/tweets_${SINCE_DATE}_w${i}.csv"
+  fname="output/tweets_${SINCE_DATE}_w${i}.csv"
 
   echo "Fetching window ${window_start} -> ${UNTIL_DATE} (date based query)"
 
