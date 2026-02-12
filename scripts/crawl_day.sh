@@ -42,7 +42,7 @@ while true; do
   echo "Fetching window ${window_start} -> ${window_end}"
 
   npx -y tweet-harvest@2.6.1 \
-    -o "tweets-data/output/${fname}" \
+    -o "output/${fname}" \
     -s "${SEARCH} since:${window_start} until:${window_end} lang:id" \
     --tab "LATEST" \
     -l 500 \
