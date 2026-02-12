@@ -1,33 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SEARCH='pemilu OR jokowi OR prabowo OR capres OR pilpres'
-WINDOW_HOURS=6
+if [ -z "${TWITTER_TOKEN:-}" ]; then
+  echo "TWITTER_TOKEN is not set"
+  exit 1
+fi
 
-DATA_DIR="data"
-TMP_DIR="tmp"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+DATA_DIR="${ROOT_DIR}/data"
+CURSOR_FILE="${DATA_DIR}/.cursor_date"
+
+TMP_DIR="${ROOT_DIR}/tweets-data/tmp"
+OUT_DIR="${ROOT_DIR}/tweets-data/output"
 
 mkdir -p "$DATA_DIR"
 mkdir -p "$TMP_DIR"
+mkdir -p "$OUT_DIR"
 
 # read cursor
-CURSOR_FILE="data/.cursor_date"
 SINCE_DATE=$(cat "$CURSOR_FILE")
-
-# stop after 3 months
-END_DATE="2019-07-19"
-
 UNTIL_DATE=$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")
 
 echo "Crawl day: since ${SINCE_DATE}, until ${UNTIL_DATE}"
 
-if [[ "$(date -d "$SINCE_DATE" +%s)" -ge "$(date -d "$END_DATE" +%s)" ]]; then
-  echo "Reached end date. Stop crawling."
-  exit 0
-fi
+WINDOW_HOURS=6
+SEARCH='pemilu OR jokowi OR prabowo OR capres OR pilpres'
 
-out_files=()
 i=0
+files=()
 
 while true; do
   window_start=$(date -u -d "${SINCE_DATE} +${i} hours" +"%Y-%m-%dT%H:%M:%SZ")
@@ -37,44 +38,45 @@ while true; do
     break
   fi
 
-  fname="${TMP_DIR}/tweets_${SINCE_DATE}_w${i}.csv"
+  fname="tweets_${SINCE_DATE}_w${i}.csv"
 
   echo "Fetching window ${window_start} -> ${window_end}"
 
-  QUERY="${SEARCH} since:${window_start} until:${window_end} lang:id"
-
-  timeout 5m npx -y tweet-harvest@2.6.1 \
-    -o "$fname" \
-    -s "$QUERY" \
+  npx -y tweet-harvest@2.6.1 \
+    -o "${OUT_DIR}/${fname}" \
+    -s "${SEARCH} since:${window_start} until:${window_end} lang:id" \
     --tab "LATEST" \
     -l 500 \
     --token "${TWITTER_TOKEN}" || true
 
-  out_files+=("$fname")
+  if [ -f "${OUT_DIR}/${fname}" ]; then
+    files+=("${OUT_DIR}/${fname}")
+  fi
 
   i=$((i + WINDOW_HOURS))
 done
 
 
-FINAL="${DATA_DIR}/pemilu_${SINCE_DATE}.csv"
+FINAL_FILE="${DATA_DIR}/pemilu_${SINCE_DATE}.csv"
+
+echo "Merging to ${FINAL_FILE}"
 
 first=true
-> "$FINAL"
+> "${FINAL_FILE}"
 
-for f in "${out_files[@]}"; do
-  if [[ ! -s "$f" ]]; then
-    continue
-  fi
-
+for f in "${files[@]}"; do
   if $first; then
-    cat "$f" >> "$FINAL"
+    cat "$f" >> "${FINAL_FILE}"
     first=false
   else
-    tail -n +2 "$f" >> "$FINAL"
+    tail -n +2 "$f" >> "${FINAL_FILE}"
   fi
 done
 
-# advance cursor
-date -d "${SINCE_DATE} +1 day" +"%Y-%m-%d" > "$CURSOR_FILE"
 
-echo "Saved $FINAL"
+# advance cursor
+NEXT_DATE=$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")
+echo "${NEXT_DATE}" > "${CURSOR_FILE}"
+
+echo "Saved ${FINAL_FILE}"
+echo "Next cursor: ${NEXT_DATE}"
