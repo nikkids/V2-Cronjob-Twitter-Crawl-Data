@@ -8,17 +8,16 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-DATA_DIR="${ROOT_DIR}/data"
+cd "$ROOT_DIR"
+
+DATA_DIR="data"
 CURSOR_FILE="${DATA_DIR}/.cursor_date"
 
-TMP_DIR="${ROOT_DIR}/tweets-data/tmp"
-OUT_DIR="${ROOT_DIR}/tweets-data/output"
+OUT_DIR="tweets-data/output"
 
 mkdir -p "$DATA_DIR"
-mkdir -p "$TMP_DIR"
 mkdir -p "$OUT_DIR"
 
-# read cursor
 SINCE_DATE=$(cat "$CURSOR_FILE")
 UNTIL_DATE=$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")
 
@@ -43,19 +42,18 @@ while true; do
   echo "Fetching window ${window_start} -> ${window_end}"
 
   npx -y tweet-harvest@2.6.1 \
-    -o "${OUT_DIR}/${fname}" \
+    -o "tweets-data/output/${fname}" \
     -s "${SEARCH} since:${window_start} until:${window_end} lang:id" \
     --tab "LATEST" \
     -l 500 \
     --token "${TWITTER_TOKEN}" || true
 
-  if [ -f "${OUT_DIR}/${fname}" ]; then
-    files+=("${OUT_DIR}/${fname}")
+  if [ -f "tweets-data/output/${fname}" ]; then
+    files+=("tweets-data/output/${fname}")
   fi
 
   i=$((i + WINDOW_HOURS))
 done
-
 
 FINAL_FILE="${DATA_DIR}/pemilu_${SINCE_DATE}.csv"
 
@@ -73,8 +71,6 @@ for f in "${files[@]}"; do
   fi
 done
 
-
-# advance cursor
 NEXT_DATE=$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")
 echo "${NEXT_DATE}" > "${CURSOR_FILE}"
 
