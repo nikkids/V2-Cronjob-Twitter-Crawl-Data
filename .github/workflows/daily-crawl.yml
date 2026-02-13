@@ -2,51 +2,65 @@ name: Daily Twitter Crawl
 
 on:
   schedule:
-    # 19:00 WIB = 12:00 UTC
-    - cron: "0 12 * * *"
+    # 02:00 WIB = 19:00 UTC
+    - cron: "0 19 * * *"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18
+
+      # Decide which date to crawl next
+      - name: Decide crawl date
+        run: |
+          mkdir -p data
+
+          if ls data/*.csv >/dev/null 2>&1; then
+            last=$(ls data/*.csv | sed 's#.*/##' | sed 's/.csv//' | sort | tail -n 1)
+            next=$(date -u -d "$last +1 day" +"%Y-%m-%d")
+          else
+            next="2019-04-21"
+          fi
+
+          end="2019-07-21"
+
+          if [[ "$next" > "$end" ]]; then
+            echo "Reached end of crawl range ($end). Nothing to do."
+            echo "SKIP_CRAWL=true" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          echo "CRAWL_DATE=$next" >> $GITHUB_ENV
+          echo "Using crawl date: $next"
 
       - name: Run crawler
+        if: env.SKIP_CRAWL != 'true'
         env:
           TWITTER_TOKEN: ${{ secrets.TWITTER_TOKEN }}
+          CRAWL_DATE: ${{ env.CRAWL_DATE }}
         run: |
           chmod +x scripts/crawl_day.sh
           ./scripts/crawl_day.sh
 
-      - name: Commit results
+      - name: Commit crawl result
+        if: env.SKIP_CRAWL != 'true'
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-      
-          git add data
-      
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
-      
-          git commit -m "Daily crawl $(date -u +%Y-%m-%d)"
-      
-          # VERY IMPORTANT
-          git pull --rebase origin main
-          git push origin main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          git add data/*.csv
+          git commit -m "Add crawl result for $CRAWL_DATE" || echo "Nothing to commit"
+          git push
