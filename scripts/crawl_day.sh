@@ -1,86 +1,100 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
-TWITTER_TOKEN="${TWITTER_TOKEN:-}"
+#####################################
+# Config
+#####################################
 
-# IMPORTANT:
-# tweet-harvest will write into:
-#   tweets-data/<path you give in -o>
-#
-# So PART_DIR must be relative, not including tweets-data.
-PART_DIR="data"
-
-# final csv committed to repo
-FINAL_DIR="data"
-
-# make sure the real folder exists
-mkdir -p "tweets-data/${PART_DIR}"
-mkdir -p "${FINAL_DIR}"
-
+TIME_LIMIT=60            # seconds
 WINDOW_HOURS=6
 
-# ---- time limit (seconds) ----
-TIME_LIMIT=60
-START_TS=$(date +%s)
-# --------------------------------
+OUT_DIR="data"
+mkdir -p "$OUT_DIR"
 
-SINCE_DATE="${CRAWL_DATE:?CRAWL_DATE is required}"
+START_TIME=$(date +%s)
+
+#####################################
+# Required env from workflow
+#####################################
+
+: "${CRAWL_DATE:?CRAWL_DATE is required}"
+: "${TWITTER_TOKEN:?TWITTER_TOKEN is required}"
+
+SINCE_DATE="$CRAWL_DATE"
 UNTIL_DATE=$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")
 
 echo "Crawl day: since ${SINCE_DATE}, until ${UNTIL_DATE}"
 echo "Time limit: ${TIME_LIMIT}s"
+
+#####################################
+# Helpers
+#####################################
+
+time_up() {
+  now=$(date +%s)
+  (( now - START_TIME >= TIME_LIMIT ))
+}
+
+#####################################
+# Main loop
+#####################################
 
 i=0
 out_files=()
 
 while true; do
 
-  now=$(date +%s)
-  elapsed=$((now - START_TS))
-  if [ "$elapsed" -ge "$TIME_LIMIT" ]; then
-    echo "Time limit reached (${elapsed}s). Stopping crawl loop."
+  if time_up; then
+    echo "Time limit reached. Stop crawling."
     break
   fi
 
   window_start=$(date -u -d "${SINCE_DATE} +${i} hours" +"%Y-%m-%dT%H:%M:%SZ")
-  window_end=$(date -u -d "${window_start} +${WINDOW_HOURS} hours" +"%Y-%m-%dT%H:%M:%SZ")
 
-  if [[ "$(date -u -d "$window_start" +%s)" -ge "$(date -u -d "${UNTIL_DATE}T00:00:00Z" +%s)" ]]; then
+  if [[ "$(date -u -d "$window_start" +%s)" -ge \
+        "$(date -u -d "${UNTIL_DATE}T00:00:00Z" +%s)" ]]; then
     break
   fi
 
-  # IMPORTANT: relative path
-  fname="${PART_DIR}/_part_${SINCE_DATE}_w${i}.csv"
+  fname="${OUT_DIR}/_part_${SINCE_DATE}_w${i}.csv"
 
-  echo "Fetching window ${window_start} -> ${window_end}"
+  echo "Fetching window ${window_start}"
 
   SEARCH='pemilu OR jokowi OR prabowo OR capres OR pilpres'
   QUERY="${SEARCH} since:${SINCE_DATE} until:${UNTIL_DATE} lang:id"
 
-  timeout 55s npx -y tweet-harvest@2.6.1 \
-    -o "${fname}" \
-    -s "${QUERY}" \
-    --tab "LATEST" \
-    -l 1000 \
-    --token "${TWITTER_TOKEN}" || echo "tweet-harvest timed out"
+  #
+  # IMPORTANT:
+  # tweet-harvest MUST be wrapped by timeout
+  #
+  timeout 55s \
+    npx -y tweet-harvest@2.6.1 \
+      -o "${fname}" \
+      -s "${QUERY}" \
+      --tab "LATEST" \
+      -l 1000 \
+      --token "${TWITTER_TOKEN}" \
+    || echo "Window timed out or failed, continue..."
 
-  # the real file lives here:
-  real_file="tweets-data/${fname}"
-
-  if [[ -f "${real_file}" ]]; then
-    out_files+=("${real_file}")
+  if [[ -f "$fname" ]]; then
+    out_files+=("$fname")
   fi
 
   i=$((i + WINDOW_HOURS))
+
 done
 
-FINAL="${FINAL_DIR}/${SINCE_DATE}.csv"
+#####################################
+# Merge files
+#####################################
+
+FINAL="${OUT_DIR}/${SINCE_DATE}.csv"
 
 first=true
-> "$FINAL"
+: > "$FINAL"
 
 for f in "${out_files[@]}"; do
-  if [[ ! -f "$f" ]]; then
+  if [[ ! -s "$f" ]]; then
     continue
   fi
 
@@ -92,8 +106,11 @@ for f in "${out_files[@]}"; do
   fi
 done
 
-# cleanup only tweet-harvest temp files
-rm -f "tweets-data/${PART_DIR}/_part_${SINCE_DATE}_w"*.csv
+#####################################
+# Cleanup
+#####################################
+
+rm -f "${OUT_DIR}/_part_${SINCE_DATE}_w"*.csv || true
 
 echo "Final file created: $FINAL"
-ls -lh "$FINAL_DIR"
+ls -lh "$OUT_DIR"
