@@ -11,7 +11,7 @@ mkdir -p "${FINAL_DIR}"
 WINDOW_HOURS=6
 
 # ---- SETTINGS ----
-TIME_LIMIT=60         # Global limit for this step
+TIME_LIMIT=210         # Global limit for this step
 SAFETY_BUFFER=30      # Don't start a new scrape if less than 30s remain
 # ------------------
 
