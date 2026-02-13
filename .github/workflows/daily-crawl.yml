@@ -2,17 +2,12 @@ name: Daily Twitter Crawl
 
 on:
   schedule:
-    # 02:00 WIB = 19:00 UTC
-    - cron: "0 19 * * *"
+    - cron: "0 2 * * *"
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
 
     steps:
       - name: Checkout repo
@@ -23,44 +18,28 @@ jobs:
         with:
           node-version: 18
 
-      # Decide which date to crawl next
       - name: Decide crawl date
         run: |
           mkdir -p data
-
-          if ls data/*.csv >/dev/null 2>&1; then
-            last=$(ls data/*.csv | sed 's#.*/##' | sed 's/.csv//' | sort | tail -n 1)
-            next=$(date -u -d "$last +1 day" +"%Y-%m-%d")
-          else
-            next="2019-04-21"
-          fi
-
-          end="2019-07-21"
-
-          if [[ "$next" > "$end" ]]; then
-            echo "Reached end of crawl range ($end). Nothing to do."
-            echo "SKIP_CRAWL=true" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          echo "CRAWL_DATE=$next" >> $GITHUB_ENV
-          echo "Using crawl date: $next"
+          echo "CRAWL_DATE=2019-04-22" >> $GITHUB_ENV
+          echo "Using crawl date: 2019-04-22"
 
       - name: Run crawler
-        if: env.SKIP_CRAWL != 'true'
         env:
           TWITTER_TOKEN: ${{ secrets.TWITTER_TOKEN }}
-          CRAWL_DATE: ${{ env.CRAWL_DATE }}
         run: |
           chmod +x scripts/crawl_day.sh
           ./scripts/crawl_day.sh
 
       - name: Commit crawl result
-        if: env.SKIP_CRAWL != 'true'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
-          git add data/*.csv
-          git commit -m "Add crawl result for $CRAWL_DATE" || echo "Nothing to commit"
-          git push
+          if [ -n "$(git status --porcelain data)" ]; then
+            git add data
+            git commit -m "Add crawl result for $CRAWL_DATE"
+            git push
+          else
+            echo "No new data to commit"
+          fi
