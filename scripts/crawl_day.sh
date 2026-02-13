@@ -3,8 +3,14 @@ set -euo pipefail
 
 TWITTER_TOKEN="${TWITTER_TOKEN:-}"
 
-OUT_DIR="data"
-mkdir -p "$OUT_DIR"
+# where tweet-harvest really writes
+PART_DIR="tweets-data/data"
+
+# where we store final csv in repo
+FINAL_DIR="data"
+
+mkdir -p "$PART_DIR"
+mkdir -p "$FINAL_DIR"
 
 WINDOW_HOURS=6
 
