@@ -3,33 +3,34 @@ set -euo pipefail
 
 TWITTER_TOKEN="${TWITTER_TOKEN:-}"
 
-# must be provided by workflow
+# Required from workflow
 SINCE_DATE="${CRAWL_DATE:?CRAWL_DATE is required}"
 UNTIL_DATE=$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")
 
 WINDOW_HOURS=6
-TIME_LIMIT=60   # seconds
 
-PART_DIR="data/parts"
+# IMPORTANT: match tweet-harvest real folder behaviour
+BASE_DIR="tweets-data/data"
+PART_DIR="${BASE_DIR}/parts"
 FINAL_DIR="data"
 
 mkdir -p "$PART_DIR"
 mkdir -p "$FINAL_DIR"
 
 echo "Crawl day: since ${SINCE_DATE}, until ${UNTIL_DATE}"
-echo "Time limit: ${TIME_LIMIT}s"
 
-start_ts=$(date +%s)
+START_TIME=$(date +%s)
+TIME_LIMIT=60
 
 i=0
 out_files=()
 
 while true; do
-  now=$(date +%s)
-  elapsed=$((now - start_ts))
+  NOW=$(date +%s)
+  ELAPSED=$((NOW - START_TIME))
 
-  if (( elapsed >= TIME_LIMIT )); then
-    echo "Time limit reached, stopping crawl loop."
+  if [ "$ELAPSED" -ge "$TIME_LIMIT" ]; then
+    echo "Time limit reached. Stopping crawler loop."
     break
   fi
 
@@ -47,22 +48,17 @@ while true; do
   SEARCH='pemilu OR jokowi OR prabowo OR capres OR pilpres'
   QUERY="${SEARCH} since:${SINCE_DATE} until:${UNTIL_DATE} lang:id"
 
-  remaining=$(( TIME_LIMIT - elapsed ))
-  if (( remaining <= 0 )); then
-    echo "No remaining time."
-    break
-  fi
+  echo "Time limit: ${TIME_LIMIT}s"
 
-  # IMPORTANT:
-  # do NOT use tweets-data/ in the path
-  timeout "${remaining}" npx -y tweet-harvest@2.6.1 \
+  # HARD STOP the crawler itself
+  timeout 55s npx -y tweet-harvest@2.6.1 \
     -o "${fname}" \
     -s "${QUERY}" \
     --tab "LATEST" \
     -l 1000 \
     --token "${TWITTER_TOKEN}" || true
 
-  if [[ -f "$fname" ]]; then
+  if [ -f "$fname" ]; then
     out_files+=("$fname")
   fi
 
@@ -70,6 +66,7 @@ while true; do
 done
 
 FINAL="${FINAL_DIR}/${SINCE_DATE}.csv"
+
 first=true
 > "$FINAL"
 
@@ -86,7 +83,7 @@ for f in "${out_files[@]}"; do
   fi
 done
 
-rm -f "${PART_DIR}/_part_${SINCE_DATE}_w"*.csv || true
+rm -f "${PART_DIR}/_part_${SINCE_DATE}_w"*.csv
 
 echo "Final file created: $FINAL"
 ls -lh "$FINAL_DIR"
