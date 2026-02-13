@@ -2,8 +2,7 @@ name: Daily Twitter Crawl
 
 on:
   schedule:
-    # 02:00 WIB = 19:00 UTC
-    - cron: "0 19 * * *"
+    - cron: "0 5 * * *"
   workflow_dispatch:
 
 permissions:
