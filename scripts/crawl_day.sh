@@ -3,14 +3,19 @@ set -euo pipefail
 
 TWITTER_TOKEN="${TWITTER_TOKEN:-}"
 
-# tweet-harvest always writes under tweets-data/
-PART_DIR="tweets-data/data"
+# IMPORTANT:
+# tweet-harvest will write into:
+#   tweets-data/<path you give in -o>
+#
+# So PART_DIR must be relative, not including tweets-data.
+PART_DIR="data"
 
-# final dataset that will be committed to the repo
+# final csv committed to repo
 FINAL_DIR="data"
 
-mkdir -p "$PART_DIR"
-mkdir -p "$FINAL_DIR"
+# make sure the real folder exists
+mkdir -p "tweets-data/${PART_DIR}"
+mkdir -p "${FINAL_DIR}"
 
 WINDOW_HOURS=6
 
@@ -19,7 +24,6 @@ TIME_LIMIT=60
 START_TS=$(date +%s)
 # --------------------------------
 
-# must be provided by GitHub Actions
 SINCE_DATE="${CRAWL_DATE:?CRAWL_DATE is required}"
 UNTIL_DATE=$(date -u -d "${SINCE_DATE} +1 day" +"%Y-%m-%d")
 
@@ -31,14 +35,12 @@ out_files=()
 
 while true; do
 
-  # ---- global time guard ----
   now=$(date +%s)
   elapsed=$((now - START_TS))
   if [ "$elapsed" -ge "$TIME_LIMIT" ]; then
     echo "Time limit reached (${elapsed}s). Stopping crawl loop."
     break
   fi
-  # ---------------------------
 
   window_start=$(date -u -d "${SINCE_DATE} +${i} hours" +"%Y-%m-%dT%H:%M:%SZ")
   window_end=$(date -u -d "${window_start} +${WINDOW_HOURS} hours" +"%Y-%m-%dT%H:%M:%SZ")
@@ -47,6 +49,7 @@ while true; do
     break
   fi
 
+  # IMPORTANT: relative path
   fname="${PART_DIR}/_part_${SINCE_DATE}_w${i}.csv"
 
   echo "Fetching window ${window_start} -> ${window_end}"
@@ -54,7 +57,6 @@ while true; do
   SEARCH='pemilu OR jokowi OR prabowo OR capres OR pilpres'
   QUERY="${SEARCH} since:${SINCE_DATE} until:${UNTIL_DATE} lang:id"
 
-  # protect single crawl execution
   timeout 55s npx -y tweet-harvest@2.6.1 \
     -o "${fname}" \
     -s "${QUERY}" \
@@ -62,8 +64,11 @@ while true; do
     -l 1000 \
     --token "${TWITTER_TOKEN}" || echo "tweet-harvest timed out"
 
-  if [[ -f "${fname}" ]]; then
-    out_files+=("${fname}")
+  # the real file lives here:
+  real_file="tweets-data/${fname}"
+
+  if [[ -f "${real_file}" ]]; then
+    out_files+=("${real_file}")
   fi
 
   i=$((i + WINDOW_HOURS))
@@ -87,8 +92,8 @@ for f in "${out_files[@]}"; do
   fi
 done
 
-# cleanup partial files
-rm -f "${PART_DIR}/_part_${SINCE_DATE}_w"*.csv
+# cleanup only tweet-harvest temp files
+rm -f "tweets-data/${PART_DIR}/_part_${SINCE_DATE}_w"*.csv
 
 echo "Final file created: $FINAL"
 ls -lh "$FINAL_DIR"
