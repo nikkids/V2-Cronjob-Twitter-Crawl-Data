@@ -4,7 +4,7 @@ This repository automatically scrapes Twitter (X) data on a daily schedule using
 
 ## How It Works
 
-* **Schedule:** Runs daily at 12:00 PM WIB (05:00 UTC).
+* **Schedule:** Runs daily at 01:00 PM WIB (05:00 UTC).
 * **Duration:** Runs for 3 minutes per execution.
 * **Logic:** Automatically picks up from the last crawled date found in the `data/` folder.
 * **Storage:** Results are saved as CSV files and committed back to the repository.
