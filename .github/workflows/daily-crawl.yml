@@ -31,7 +31,7 @@ jobs:
             last=$(ls data/*.csv | sed 's#.*/##' | sed 's/.csv//' | sort | tail -n 1)
             next=$(date -u -d "$last +1 day" +"%Y-%m-%d")
           else
-            next="2019-04-21"
+            next="2019-01-01"
           fi
 
           end="2019-07-21"
