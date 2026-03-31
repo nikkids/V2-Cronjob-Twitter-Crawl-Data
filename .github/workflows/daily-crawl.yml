@@ -31,10 +31,10 @@ jobs:
             last=$(ls data/*.csv | sed 's#.*/##' | sed 's/.csv//' | sort | tail -n 1)
             next=$(date -u -d "$last +1 day" +"%Y-%m-%d")
           else
-            next="2019-01-01"
+            next="2018-12-15"
           fi
 
-          end="2019-07-21"
+          end="2019-01-30"
 
           if [[ "$next" > "$end" ]]; then
             echo "Reached end of crawl range ($end). Nothing to do."
