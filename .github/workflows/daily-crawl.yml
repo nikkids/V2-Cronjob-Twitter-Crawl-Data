@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 env:
-  START_DATE: "2019-12-01"
-  END_DATE: "2020-01-30"
+  START_DATE: "2018-12-01"
+  END_DATE: "2019-01-30"
 
 jobs:
   crawl:
@@ -34,13 +34,23 @@ jobs:
           echo "Start date: $START_DATE"
           echo "End date: $END_DATE"
 
-          if ls data/*.csv >/dev/null 2>&1; then
-            last=$(ls data/*.csv | sed 's#.*/##' | sed 's/.csv//' | sort | tail -n 1)
+          # Filter only files within range
+          files=$(ls data/*.csv 2>/dev/null | sed 's#.*/##' | sed 's/.csv//' | sort)
+
+          valid_files=""
+          for f in $files; do
+            if [[ "$f" >= "$START_DATE" && "$f" <= "$END_DATE" ]]; then
+              valid_files="$valid_files $f"
+            fi
+          done
+
+          if [[ -n "$valid_files" ]]; then
+            last=$(echo $valid_files | tr ' ' '\n' | sort | tail -n 1)
             next=$(date -u -d "$last +1 day" +"%Y-%m-%d")
-            echo "Last crawled: $last"
+            echo "Last valid crawled: $last"
           else
             next="$START_DATE"
-            echo "No data found, starting from START_DATE"
+            echo "No valid data in range, starting from START_DATE"
           fi
 
           echo "Next crawl date: $next"
