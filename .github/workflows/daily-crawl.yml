@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+env:
+  START_DATE: "2019-12-01"
+  END_DATE: "2020-01-30"
+
 jobs:
   crawl:
     runs-on: ubuntu-latest
@@ -27,17 +31,23 @@ jobs:
         run: |
           mkdir -p data
 
+          echo "Start date: $START_DATE"
+          echo "End date: $END_DATE"
+
           if ls data/*.csv >/dev/null 2>&1; then
             last=$(ls data/*.csv | sed 's#.*/##' | sed 's/.csv//' | sort | tail -n 1)
             next=$(date -u -d "$last +1 day" +"%Y-%m-%d")
+            echo "Last crawled: $last"
           else
-            next="2018-12-15"
+            next="$START_DATE"
+            echo "No data found, starting from START_DATE"
           fi
 
-          end="2019-01-30"
+          echo "Next crawl date: $next"
 
-          if [[ "$next" > "$end" ]]; then
-            echo "Reached end of crawl range ($end). Nothing to do."
+          # Stop if beyond end date
+          if [[ "$next" > "$END_DATE" ]]; then
+            echo "Reached end of crawl range ($END_DATE). Nothing to do."
             echo "SKIP_CRAWL=true" >> $GITHUB_ENV
             exit 0
           fi
